@@ -1,0 +1,24 @@
+{
+  "name": "keyword-volume-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "네이버 키워드 검색량 조회 안드로이드 앱",
+  "scripts": {
+    "sync": "cap sync android",
+    "vendor": "node scripts/copy-vendor.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/browser": "8.0.5",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/share": "8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "chart.js": "^4.5.1",
+    "qrcode-generator": "^2.0.4",
+    "xlsx": "^0.18.5"
+  }
+}

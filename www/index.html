@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>키워드 검색량</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ======================================================== 첫 실행: 키 설정 -->
+<section id="onboard" class="onboard" hidden>
+  <div class="ob-inner">
+    <div class="ob-brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" class="bg"/><rect x="7" y="17" width="4" height="8" class="fg"/><rect x="14" y="11" width="4" height="14" class="fg"/><rect x="21" y="6" width="4" height="19" class="fg"/></svg>
+      <h1>키워드 검색량</h1>
+    </div>
+
+    <div id="obStep1">
+      <p class="ob-lead">네이버 검색수를 보려면 <b>내 검색광고 API 키</b>가 필요합니다. 무료이고, 광고비 없이 5분이면 받을 수 있습니다.</p>
+      <ol class="steps">
+        <li>아래 버튼으로 네이버 검색광고에 로그인합니다. 처음이면 광고주로 가입합니다.</li>
+        <li>화면 오른쪽 위 <b>PC 버전</b>(또는 데스크톱 사이트)으로 바꾼 뒤 <b>광고시스템</b>에 들어갑니다.</li>
+        <li><b>도구 → API 사용 관리</b>에서 <b>API 서비스 신청</b>을 누릅니다.</li>
+        <li>나오는 <b>액세스라이선스</b>, <b>비밀키</b>(‘보기’를 눌러 전체), <b>CUSTOMER_ID</b>를 복사해 아래에 붙여넣습니다.</li>
+      </ol>
+      <button class="btn ghost block" data-ext="https://searchad.naver.com">네이버 검색광고 열기</button>
+      <form id="obAdForm" class="fields" autocomplete="off">
+        <label>액세스라이선스<input name="ad_api_key" required spellcheck="false" autocapitalize="off"></label>
+        <label>비밀키<input name="ad_secret" type="password" required spellcheck="false" autocapitalize="off"></label>
+        <label>CUSTOMER_ID<input name="ad_customer_id" inputmode="numeric" required spellcheck="false"></label>
+        <p class="msg" id="obAdMsg" role="status"></p>
+        <button class="btn primary block">연결 확인하고 다음</button>
+      </form>
+    </div>
+
+    <div id="obStep2" hidden>
+      <p class="ob-lead">검색수 조회 준비가 끝났습니다. <b>블로그 포화도</b>와 <b>트렌드 그래프</b>까지 쓰려면 네이버 개발자센터 키를 하나 더 넣습니다. 나중에 [설정]에서 해도 됩니다.</p>
+      <ol class="steps">
+        <li>아래 버튼으로 개발자센터에 로그인 → <b>애플리케이션 등록</b>.</li>
+        <li>이름은 아무거나, <b>사용 API</b>에 <b>검색</b>과 <b>데이터랩(검색어트렌드)</b>을 추가합니다.</li>
+        <li>환경은 <b>WEB 설정</b>, URL은 <code>http://localhost</code>를 넣고 등록합니다.</li>
+        <li><b>Client ID</b>와 <b>Client Secret</b>을 붙여넣습니다.</li>
+      </ol>
+      <button class="btn ghost block" data-ext="https://developers.naver.com/apps/#/register">네이버 개발자센터 열기</button>
+      <form id="obDevForm" class="fields" autocomplete="off">
+        <label>Client ID<input name="dev_client_id" spellcheck="false" autocapitalize="off"></label>
+        <label>Client Secret<input name="dev_client_secret" type="password" spellcheck="false" autocapitalize="off"></label>
+        <p class="msg" id="obDevMsg" role="status"></p>
+        <button class="btn primary block">연결 확인하고 시작</button>
+        <button type="button" class="btn ghost block" id="obSkip">건너뛰고 시작</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================== 본 화면 -->
+<div id="shell" class="shell" hidden>
+  <header class="appbar">
+    <h1 id="viewTitle">조회</h1>
+    <button id="jobChip" class="job-chip" hidden>조회 중 <span id="jobChipText"></span></button>
+  </header>
+
+  <div id="updateBanner" class="banner" hidden>
+    <span id="updateText">새 버전이 있습니다.</span>
+    <button class="btn small primary" id="updateBtn">받기</button>
+  </div>
+  <div id="keyBanner" class="banner warn" hidden>
+    <span id="keyBannerText"></span>
+    <button class="btn small" data-goto="settings">설정</button>
+  </div>
+
+  <main id="main">
+    <!-- ------------------------------------------------ 조회 -->
+    <section id="v-search" class="view on" aria-label="키워드 조회">
+      <form id="quickForm" class="searchbar" role="search">
+        <input id="q" type="search" enterkeyhint="search" placeholder="키워드 입력 (예: 전주맛집)" autocomplete="off" spellcheck="false" aria-label="키워드">
+        <button class="btn primary" id="qBtn">조회</button>
+      </form>
+      <div class="quick-opts">
+        <label class="pill">연관
+          <select id="qRel" aria-label="연관 키워드 개수">
+            <option value="0">안 봄</option><option value="10" selected>10개</option><option value="30">30개</option><option value="50">50개</option>
+          </select>
+        </label>
+        <label class="pill"><input type="checkbox" id="qBlog" checked> 포화도</label>
+        <button type="button" class="link" id="bulkToggle" aria-expanded="false">여러 개 한 번에</button>
+      </div>
+
+      <div id="bulk" class="panel" hidden>
+        <label class="field-label" for="kwInput">키워드 목록 <span id="kwCount" class="count">0개</span></label>
+        <textarea id="kwInput" rows="6" spellcheck="false" placeholder="한 줄에 하나씩 붙여넣으세요"></textarea>
+        <div class="row gap wrap">
+          <label class="btn small ghost">엑셀·CSV 불러오기<input type="file" id="fileInput" accept=".xlsx,.xlsm,.csv,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label>
+          <button type="button" class="btn small ghost" id="clearKw">비우기</button>
+        </div>
+        <div class="opt-grid">
+          <label class="pill"><input type="checkbox" id="bExpand"> 연관 키워드 수집</label>
+          <label class="inline">입력당 최대 <input type="number" id="bRelLimit" value="30" min="0" step="10" inputmode="numeric"> 개</label>
+          <label class="inline">검색수 <input type="number" id="bRelMin" value="100" min="0" step="50" inputmode="numeric"> 이상</label>
+          <label class="pill"><input type="checkbox" id="bBlog" checked> 블로그 포화도</label>
+        </div>
+        <input type="text" id="bTitle" placeholder="조회 이름 (선택)">
+        <p class="hint" id="callEstimate"></p>
+        <button type="button" class="btn primary block" id="bulkStart">일괄 조회 시작</button>
+      </div>
+
+      <div id="progress" class="panel progress" hidden>
+        <div class="row between"><b id="progPhase">검색량 조회</b><span id="progText" class="hint"></span></div>
+        <div class="bar"><i id="progBar"></i></div>
+        <div class="row between"><span class="hint">앱을 켜 둔 채로 기다려 주세요.</span><button class="btn small ghost" id="cancelBtn">중지</button></div>
+      </div>
+      <div id="notice" class="notice" hidden role="status"></div>
+
+      <div id="resultArea" hidden>
+        <div id="hero"></div>
+        <div class="list-head" id="listHead">
+          <div><h2 id="listTitle">결과</h2><p class="hint" id="listMeta"></p></div>
+          <div class="row gap">
+            <select id="sortSel" aria-label="정렬">
+              <option value="total:-1">검색수 많은순</option>
+              <option value="total:1">검색수 적은순</option>
+              <option value="saturation:1">포화지수 낮은순</option>
+              <option value="comp:1">경쟁 낮은순</option>
+              <option value="keyword:1">가나다순</option>
+              <option value="order:1">조회 순서</option>
+            </select>
+            <button class="btn small ghost" id="filterBtn">필터<span id="filterCount"></span></button>
+          </div>
+        </div>
+        <div id="cards" class="cards"></div>
+        <button class="btn ghost block" id="moreBtn" hidden>더 보기</button>
+        <div class="result-actions">
+          <button class="btn" id="shareXlsx">엑셀 공유·저장</button>
+          <button class="btn ghost" id="selectMode">선택해서 비교</button>
+        </div>
+      </div>
+
+      <div id="home" class="home">
+        <div id="recentWrap" hidden>
+          <h2>최근 조회</h2>
+          <div id="recentList" class="recent"></div>
+        </div>
+        <p class="hint home-tip">키워드 카드를 누르면 클릭수·클릭률·블로그 문서 수가 펼쳐집니다. 길게 누르면 여러 개를 골라 트렌드로 비교할 수 있습니다.</p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------ 트렌드 -->
+    <section id="v-trend" class="view" aria-label="트렌드">
+      <div class="panel">
+        <p class="hint">같은 뜻의 키워드는 쉼표로 묶으면 합쳐서 봅니다 (예: 캠핑의자, 캠핑 체어).</p>
+        <div id="groups" class="groups"></div>
+        <div class="chips" id="tPreset" role="radiogroup" aria-label="기간">
+          <button type="button" data-days="30">1개월</button><button type="button" data-days="90">3개월</button>
+          <button type="button" data-days="365" class="on">1년</button><button type="button" data-days="1095">3년</button>
+        </div>
+        <div class="seg" id="tUnit" role="radiogroup" aria-label="단위">
+          <button type="button" data-v="date">일</button><button type="button" data-v="week">주</button><button type="button" data-v="month" class="on">월</button>
+        </div>
+        <details class="more-opts">
+          <summary>세부 조건</summary>
+          <label class="inline">기기 <select id="tDevice"><option value="">전체</option><option value="pc">PC</option><option value="mo">모바일</option></select></label>
+          <label class="inline">성별 <select id="tGender"><option value="">전체</option><option value="m">남성</option><option value="f">여성</option></select></label>
+          <div class="ages" id="tAges" role="group" aria-label="연령"></div>
+          <label class="inline">직접 기간 <input type="date" id="tStart"> ~ <input type="date" id="tEnd"></label>
+        </details>
+        <label class="pill"><input type="checkbox" id="tEstimate" checked> 검색량으로 환산</label>
+        <button class="btn primary block" id="trendBtn">트렌드 보기</button>
+      </div>
+      <div id="trendNotice" class="notice" hidden></div>
+      <div id="trendResult" hidden>
+        <div class="row between wrap gap">
+          <div class="seg" id="tView"><button data-v="estimate" class="on">추정 검색량</button><button data-v="ratio">상대지수</button></div>
+          <button class="btn small ghost" id="trendShare">엑셀 공유</button>
+        </div>
+        <p class="hint" id="trendMeta"></p>
+        <div class="chart-box"><canvas id="trendChart" aria-label="트렌드 그래프"></canvas></div>
+        <p class="hint">점선은 기간 일부만 포함된 구간(예: 이번 달)입니다.</p>
+        <div class="table-wrap"><table class="tbl" id="trendTable"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------ 기록 -->
+    <section id="v-history" class="view" aria-label="조회 기록">
+      <form id="histForm" class="searchbar">
+        <input id="histKw" type="search" enterkeyhint="search" placeholder="키워드별 검색수 변화 보기" aria-label="키워드">
+        <button class="btn">찾기</button>
+      </form>
+      <div id="histResult" class="panel" hidden>
+        <h2 id="histTitle"></h2>
+        <div class="chart-box small"><canvas id="histChart"></canvas></div>
+        <div class="table-wrap"><table class="tbl" id="histTable"><thead></thead><tbody></tbody></table></div>
+      </div>
+      <p class="hint" id="histEmpty" hidden></p>
+      <div id="runList" class="runs"></div>
+      <p class="empty" id="runsEmpty" hidden>아직 조회 기록이 없습니다. [조회] 탭에서 키워드를 검색해 보세요.</p>
+    </section>
+
+    <!-- ------------------------------------------------ 설정 -->
+    <section id="v-settings" class="view" aria-label="설정">
+      <form id="cfgForm" autocomplete="off">
+        <div class="panel">
+          <h2>검색광고 API <span class="tag">검색수</span></h2>
+          <div class="fields">
+            <label>액세스라이선스<input name="ad_api_key" spellcheck="false" autocapitalize="off"></label>
+            <label>비밀키<input name="ad_secret" type="password" spellcheck="false" autocapitalize="off"></label>
+            <label>CUSTOMER_ID<input name="ad_customer_id" inputmode="numeric" spellcheck="false"></label>
+          </div>
+          <div class="row gap"><button type="button" class="btn small" id="testAd">연결 확인</button><span class="msg" id="testAdMsg"></span></div>
+        </div>
+        <div class="panel">
+          <h2>개발자센터 <span class="tag">포화도·트렌드</span></h2>
+          <div class="fields">
+            <label>Client ID<input name="dev_client_id" spellcheck="false" autocapitalize="off"></label>
+            <label>Client Secret<input name="dev_client_secret" type="password" spellcheck="false" autocapitalize="off"></label>
+          </div>
+          <div class="row gap"><button type="button" class="btn small" id="testOpen">연결 확인</button><span class="msg" id="testOpenMsg"></span></div>
+        </div>
+        <div class="panel">
+          <h2>호출 간격</h2>
+          <div class="fields two">
+            <label>검색광고 (초)<input name="ad_delay" type="number" step="0.05" min="0.1" max="5" inputmode="decimal"></label>
+            <label>블로그 (초)<input name="blog_delay" type="number" step="0.01" min="0.05" max="5" inputmode="decimal"></label>
+          </div>
+          <p class="hint">429(호출 한도 초과)가 자주 나면 간격을 늘리세요.</p>
+        </div>
+        <div class="sticky-save"><button class="btn primary block">설정 저장</button><p class="msg center" id="saveMsg"></p></div>
+      </form>
+
+      <div class="panel">
+        <h2>검색량 진단 <span class="tag">숫자가 이상할 때</span></h2>
+        <p class="hint">키워드 하나를 단독으로 조회해, 보낸 값과 네이버가 돌려준 원본 응답을 그대로 보여줍니다.</p>
+        <form id="diagForm" class="searchbar">
+          <input id="diagKw" placeholder="예) 전주맛집" aria-label="진단할 키워드">
+          <button class="btn" id="diagBtn">진단</button>
+        </form>
+        <div id="diagOut" hidden>
+          <dl class="diag" id="diagSum"></dl>
+          <details><summary>일치하는 항목 원본</summary><pre id="diagMatches"></pre></details>
+          <details><summary>응답 앞부분 원본</summary><pre id="diagRaw"></pre></details>
+          <button class="btn small ghost" id="diagCopy">진단 결과 복사</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>백업·복원</h2>
+        <p class="hint">조회 기록은 이 휴대폰 안에만 저장됩니다. 휴대폰을 바꿀 때 백업 파일로 옮기세요.</p>
+        <label class="pill"><input type="checkbox" id="bkKeys"> API 키도 함께 백업 (파일 보관 주의)</label>
+        <div class="row gap wrap">
+          <button class="btn small" id="backupBtn">백업 파일 만들기</button>
+          <label class="btn small ghost">백업 불러오기<input type="file" id="restoreInput" accept=".json,application/json" hidden></label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>도움말</h2>
+        <div class="row gap wrap">
+          <button class="btn small ghost" id="guideBtn">키 발급 방법</button>
+          <button class="btn small ghost" id="legendBtn">지표 설명</button>
+          <button class="btn small ghost" id="updateCheck">업데이트 확인</button>
+        </div>
+        <p class="hint" id="appInfo"></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- 선택 모드 하단 바 -->
+  <div id="selBar" class="selbar" hidden>
+    <span id="selCount">0개 선택</span>
+    <button class="btn small primary" id="selTrend">트렌드 비교</button>
+    <button class="btn small" id="selCopy">복사</button>
+    <button class="btn small ghost" id="selCancel">취소</button>
+  </div>
+
+  <nav class="tabbar" aria-label="메뉴">
+    <button class="tab on" data-view="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><span>조회</span></button>
+    <button class="tab" data-view="trend"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18l6-6 4 4 8-9"/><path d="M15 7h6v6"/></svg><span>트렌드</span></button>
+    <button class="tab" data-view="history"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg><span>기록</span></button>
+    <button class="tab" data-view="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>설정</span></button>
+  </nav>
+</div>
+
+<!-- ======================================================== 시트 -->
+<div id="backdrop" class="backdrop" hidden></div>
+<div id="filterSheet" class="sheet" hidden role="dialog" aria-label="필터">
+  <div class="grabber"></div>
+  <h2>필터</h2>
+  <div class="fields">
+    <label>키워드에 포함<input id="fText" type="search" placeholder="예) 맛집"></label>
+    <label>구분<select id="fSource"><option value="">입력+연관</option><option value="seed">입력만</option><option value="related">연관만</option></select></label>
+    <label>경쟁<select id="fComp"><option value="">전체</option><option>낮음</option><option>중간</option><option>높음</option></select></label>
+    <div class="two">
+      <label>검색수 최소<input id="fMin" type="number" min="0" inputmode="numeric"></label>
+      <label>검색수 최대<input id="fMax" type="number" min="0" inputmode="numeric"></label>
+    </div>
+    <label>포화지수 이하 (%)<input id="fSat" type="number" min="0" inputmode="decimal"></label>
+    <label class="pill"><input type="checkbox" id="fHideErr"> 오류 숨기기</label>
+  </div>
+  <div class="row gap"><button class="btn ghost" id="fReset">초기화</button><button class="btn primary grow" id="fApply">적용</button></div>
+</div>
+
+<div id="infoSheet" class="sheet tall" hidden role="dialog">
+  <div class="grabber"></div>
+  <div id="infoBody"></div>
+  <button class="btn block" id="infoClose">닫기</button>
+</div>
+
+<template id="guideTpl">
+  <h2>키 발급 방법</h2>
+  <h3>① 검색광고 API (필수 · 검색수)</h3>
+  <ol class="steps">
+    <li>searchad.naver.com 로그인 (처음이면 광고주 가입, 광고비 충전 불필요)</li>
+    <li>PC 버전으로 바꾼 뒤 <b>광고시스템</b> 진입</li>
+    <li><b>도구 → API 사용 관리 → API 서비스 신청</b></li>
+    <li><b>액세스라이선스</b>, <b>비밀키</b>(‘보기’ 후 전체), <b>CUSTOMER_ID</b> 복사</li>
+  </ol>
+  <button class="btn small ghost" data-ext="https://searchad.naver.com">검색광고 열기</button>
+  <h3>② 개발자센터 (선택 · 포화도·트렌드)</h3>
+  <ol class="steps">
+    <li>developers.naver.com → <b>애플리케이션 등록</b></li>
+    <li>사용 API: <b>검색</b>, <b>데이터랩(검색어트렌드)</b></li>
+    <li>환경: <b>WEB 설정</b>, URL <code>http://localhost</code></li>
+    <li><b>Client ID / Client Secret</b> 복사</li>
+  </ol>
+  <button class="btn small ghost" data-ext="https://developers.naver.com/apps/#/register">개발자센터 열기</button>
+  <h3>자주 생기는 문제</h3>
+  <dl class="faq">
+    <dt>‘인증 실패’</dt><dd>값 앞뒤 공백이나 일부만 복사된 경우가 많습니다. 비밀키는 ‘보기’를 눌러 전체를 복사하세요.</dd>
+    <dt>‘사용 권한이 없습니다’</dt><dd>개발자센터 애플리케이션의 사용 API에 ‘검색’ 또는 ‘데이터랩’이 빠져 있습니다.</dd>
+    <dt>‘호출 한도 초과(429)’</dt><dd>[설정]에서 호출 간격을 늘리세요. 개발자센터 키는 하루 호출 한도가 있습니다.</dd>
+  </dl>
+</template>
+
+<template id="legendTpl">
+  <h2>지표 설명</h2>
+  <dl class="faq">
+    <dt>월간 검색수</dt><dd>최근 30일 네이버 통합검색 횟수. 검색광고 키워드도구와 같은 값입니다. ‘&lt;10’은 10회 미만이며, 합계의 ≈는 10회 미만을 5로 계산한 근사값입니다.</dd>
+    <dt>PC · 모바일 막대</dt><dd>진한 부분이 PC, 연한 부분이 모바일 비중입니다.</dd>
+    <dt>경쟁</dt><dd>파워링크 광고 경쟁 정도(낮음·중간·높음).</dd>
+    <dt>월 발행량</dt><dd>블로그 최신순 100건 중 최근 30일 글 수. ≈는 100건이 모두 30일 안이라 기간 비율로 환산한 추정치입니다.</dd>
+    <dt>포화지수</dt><dd>월 발행량 ÷ 월간 검색수 × 100. 낮을수록 찾는 사람에 비해 글이 적어 노출 기회가 큽니다. 10% 미만 매우 낮음 · 30% 미만 낮음 · 100% 미만 보통 · 300% 미만 높음 · 그 이상 매우 높음.</dd>
+    <dt>트렌드 추정 검색량</dt><dd>데이터랩 상대지수를 최근 30일 검색수에 맞춰 환산한 추정치입니다.</dd>
+  </dl>
+</template>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="vendor/chart.umd.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

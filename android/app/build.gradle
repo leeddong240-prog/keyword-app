@@ -1,0 +1,85 @@
+apply plugin: 'com.android.application'
+
+// 서명 정보: GitHub 자동 빌드에서는 환경변수로, 내 PC 빌드에서는 signing/keystore.properties 로 읽는다.
+def signingProps = new Properties()
+def signingPropsFile = rootProject.file('../signing/keystore.properties')
+if (signingPropsFile.exists()) { signingPropsFile.withInputStream { signingProps.load(it) } }
+def sig = { String key, String envKey ->
+    def v = System.getenv(envKey)
+    return (v != null && !v.isEmpty()) ? v : signingProps.getProperty(key)
+}
+def ksPath = sig('storeFile', 'KEYSTORE_FILE')
+def ksFile = ksPath ? (new File(ksPath).isAbsolute() ? new File(ksPath) : rootProject.file('../signing/' + ksPath)) : null
+def hasSigning = ksFile != null && ksFile.exists()
+def appVersionCode = (project.findProperty('appVersionCode') ?: System.getenv('APP_VERSION_CODE') ?: '1') as Integer
+def appVersionName = (project.findProperty('appVersionName') ?: System.getenv('APP_VERSION_NAME') ?: '1.0.0') as String
+
+android {
+    namespace = "com.keywordvolume.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.keywordvolume.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName appVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (hasSigning) {
+                storeFile ksFile
+                storePassword sig('storePassword', 'KEYSTORE_PASSWORD')
+                keyAlias sig('keyAlias', 'KEY_ALIAS')
+                keyPassword sig('keyPassword', 'KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (hasSigning) {
+                signingConfig signingConfigs.release
+            } else {
+                // 서명 키가 없으면 디버그 키로 서명 (설치는 되지만, 다른 PC에서 빌드한 버전 위로는 업데이트가 안 됨)
+                signingConfig signingConfigs.debug
+                println "[경고] 서명 키를 찾지 못해 디버그 키로 서명합니다. signing/keystore.properties 를 확인하세요."
+            }
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
