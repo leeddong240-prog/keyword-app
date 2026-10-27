@@ -1,0 +1,119 @@
+
+name: APK 빌드
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "버전 (예: 1.0.0 → 다음은 1.0.1). 이전보다 크게 넣으세요."
+        required: true
+        default: "1.0.0"
+      notes:
+        description: "이번 버전 변경 내용 (선택)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 버전 계산
+        id: ver
+        run: |
+          VN="${{ inputs.version_name }}"
+          if ! echo "$VN" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::버전은 1.0.0 처럼 숫자.숫자.숫자 형식으로 넣어주세요."; exit 1
+          fi
+          IFS=. read -r MA MI PA <<< "$VN"
+          VC=$((MA*10000 + MI*100 + PA))
+          echo "name=$VN" >> "$GITHUB_OUTPUT"
+          echo "code=$VC" >> "$GITHUB_OUTPUT"
+
+      - name: 서명 키 확인
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::서명 키 Secrets 4개(KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)가 없습니다. '서명키_보관용/GitHub_Secrets_붙여넣기.txt'를 보고 등록하세요."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: 패키지 설치
+        run: npm ci
+
+      - name: 앱 버전 정보 기록
+        run: |
+          cat > www/js/build-info.js <<JS
+          export const BUILD = {
+            versionName: "${{ steps.ver.outputs.name }}",
+            versionCode: ${{ steps.ver.outputs.code }},
+            updateUrl: "https://github.com/${{ github.repository }}/releases/latest/download/version.json",
+          };
+          JS
+
+      - name: 안드로이드 프로젝트 동기화
+        run: npx cap sync android
+
+      - name: APK 빌드
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon -PappVersionCode=${{ steps.ver.outputs.code }} -PappVersionName=${{ steps.ver.outputs.name }}
+
+      - name: 결과 정리
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk dist/keyword-volume.apk
+          cp dist/keyword-volume.apk "dist/keyword-volume-${{ steps.ver.outputs.name }}.apk"
+          cat > dist/version.json <<JSON
+          {
+            "versionName": "${{ steps.ver.outputs.name }}",
+            "versionCode": ${{ steps.ver.outputs.code }},
+            "url": "https://github.com/${{ github.repository }}/releases/latest/download/keyword-volume.apk",
+            "notes": ${{ toJSON(inputs.notes) }}
+          }
+          JSON
+          ls -la dist
+
+      - name: 릴리스 게시 (QR 다운로드 링크)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.name }}
+          name: 키워드 검색량 ${{ steps.ver.outputs.name }}
+          body: |
+            ${{ inputs.notes }}
+
+            고정 다운로드 링크 (QR코드용, 항상 최신 버전):
+            https://github.com/${{ github.repository }}/releases/latest/download/keyword-volume.apk
+          files: |
+            dist/keyword-volume.apk
+            dist/keyword-volume-${{ steps.ver.outputs.name }}.apk
+            dist/version.json
+          make_latest: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: keyword-volume-${{ steps.ver.outputs.name }}
+          path: dist/*.apk
